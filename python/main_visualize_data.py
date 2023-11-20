@@ -50,9 +50,9 @@ def update_plot():
         min_key, max_key = sort_key[0], sort_key[-1]
         
         if timestamp == max_key:
-            title_text.set_text("\nts = {} / {} ({:.2f}%); FDE@{}ms={:.3f} ".format(timestamp, timestamp_max, percentage, timestamp, displacement_error[timestamp]))
+            title_text.set_text("\nts = {} / {} ({:.2f}%); FDE@{}ms={:.3f} ".format(timestamp, timestamp_max, percentage, timestamp-min_key, displacement_error[timestamp]))
         else:
-            title_text.set_text("\nts = {} / {} ({:.2f}%); displacement_error@{}ms={:.3f} ".format(timestamp, timestamp_max, percentage, timestamp, displacement_error[timestamp]))
+            title_text.set_text("\nts = {} / {} ({:.2f}%); displacement_error@{}ms={:.3f} ".format(timestamp, timestamp_max, percentage, timestamp-min_key, displacement_error[timestamp]))
     else:
         sort_key = list(displacement_error.keys())
         min_key, max_key = sort_key[0], sort_key[-1]

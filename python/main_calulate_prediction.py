@@ -26,7 +26,7 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
     d_model = 16
     nhead = 4
     num_layers = 1
-    model_path = 'model_ckpt/epoch_160.pth'
+    model_path = 'model_ckpt/epoch_999.pth'
     model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
     weights = torch.load(model_path, map_location='cpu')
     delete_module_weight = OrderedDict()
