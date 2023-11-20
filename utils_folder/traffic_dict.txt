@@ -1,0 +1,4 @@
+key='ego_id-frame_id'
+value = a list of traffic_veh
+
+traffic_veh= [traffic_id, traffic_x, traffic_y, traffic_vx, traffic_vy, traffic_psi_rad]
