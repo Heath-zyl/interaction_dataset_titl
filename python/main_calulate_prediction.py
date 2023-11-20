@@ -104,22 +104,23 @@ def process(acc, ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_pat
     return prediction_track_dict
 
 
-def collision_detection(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dict.npy', traffic_dict_file='utils_folder/track_dict.npy', predicting_frames=50):
-    # 读取主车路径文件: ego_path_dict_file
-    ego_path_dict = np.load(ego_path_dict_file, allow_pickle=True)
-    ego_path_dict = str(ego_path_dict)
-    ego_path_dict = ast.literal_eval(ego_path_dict)
-    ego_path_dict = dict(ego_path_dict)
+def collision_detection(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dict.npy', traffic_dict_file='utils_folder/track_dict.npy', predicting_frames=50, ego_path_dict=None, traffic_dict=None):
+    if ego_path_dict is None: 
+        # 读取主车路径文件: ego_path_dict_file
+        ego_path_dict = np.load(ego_path_dict_file, allow_pickle=True)
+        ego_path_dict = str(ego_path_dict)
+        ego_path_dict = ast.literal_eval(ego_path_dict)
+        ego_path_dict = dict(ego_path_dict)
 
-    # 读取交通车信息文件: traffic_dict_file
-    traffic_dict = np.load(traffic_dict_file, allow_pickle=True)
-    traffic_dict = str(traffic_dict)
-    traffic_dict = ast.literal_eval(traffic_dict)
-    traffic_dict = dict(traffic_dict)
+    if traffic_dict is None:
+        # 读取交通车信息文件: traffic_dict_file
+        traffic_dict = np.load(traffic_dict_file, allow_pickle=True)
+        traffic_dict = str(traffic_dict)
+        traffic_dict = ast.literal_eval(traffic_dict)
+        traffic_dict = dict(traffic_dict)
 
     collision_acc_list = []
-    for acc in tqdm(np.arange(-5.0, 3.1, 0.1)):
-
+    for acc in np.arange(-5.0, 3.1, 0.1):
         # 获得主车初始状态
         init_ego_x, init_ego_y, init_ego_yaw, init_ego_vx, init_ego_vy, init_S = get_inital_state(ego_id, init_frame_id, ego_path_dict)    
         # init_ve = get_ve(init_ego_vx, init_ego_vy, init_ego_yaw)

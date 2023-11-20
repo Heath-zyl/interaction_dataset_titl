@@ -14,6 +14,7 @@ except ImportError:
     use_lanelet2_lib = False
     from utils import map_vis_without_lanelet
 
+import ast
 import argparse
 import os
 import time
@@ -27,6 +28,7 @@ from utils import tracks_vis
 from utils import dict_utils
 import numpy as np
 import sys
+from tqdm import tqdm
 
 
 def update_plot():
@@ -123,6 +125,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--start_timestamp", type=int, nargs="?")
     parser.add_argument("--acc", type=float, default=100.0)
+    parser.add_argument("--get_all_collision_acc", action='store_true', default='False')
     parser.add_argument("--track_id", type=int, help='track id to present')
     parser.add_argument("--duration", type=float, default=5.0, help='duration for present')
     
@@ -237,8 +240,35 @@ if __name__ == "__main__":
 
     ######### START #########
     # Calculate prediction track
-
-    if not (args.acc <= 3.0 and args.acc >= -5.0):
+    if args.get_all_collision_acc:
+        assert args.start_timestamp is None and args.track_id is None
+        data = np.load('/Users/aibee/Desktop/interaction-dataset-master/utils_folder/TIRL_train_data_000.npy', allow_pickle=True)
+        from main_calulate_prediction import collision_detection
+        
+        # 读取主车路径文件: ego_path_dict_file
+        ego_path_dict = np.load('utils_folder/ego_path_dict.npy', allow_pickle=True)
+        ego_path_dict = str(ego_path_dict)
+        ego_path_dict = ast.literal_eval(ego_path_dict)
+        ego_path_dict = dict(ego_path_dict)
+    
+        # 读取交通车信息文件: traffic_dict_file
+        traffic_dict = np.load('utils_folder/track_dict.npy', allow_pickle=True)
+        traffic_dict = str(traffic_dict)
+        traffic_dict = ast.literal_eval(traffic_dict)
+        traffic_dict = dict(traffic_dict)
+        
+        # f = open('collision_res_for_data000.txt', 'a')
+        with open('collision_res_for_data000.txt', 'w') as f:
+            for i in tqdm(range(len(data))):
+                frame_id, ego_id = data[i]['frame_id'], data[i]['ego_veh'][0]
+                collision_acc_list = collision_detection(ego_id=ego_id, init_frame_id=frame_id, predicting_frames=int(args.duration*10), ego_path_dict=ego_path_dict, traffic_dict=traffic_dict) 
+                f.write(f'ego_id:{ego_id}, frame_id:{frame_id}, {", ".join(list(map(str, collision_acc_list)))}\n')
+                f.flush()
+    
+        import sys
+        sys.exit()
+    
+    elif not (args.acc <= 3.0 and args.acc >= -5.0):
         track_id = int(args.track_id)
         collision_acc_list = []
         from main_calulate_prediction import collision_detection
