@@ -7,9 +7,10 @@ import torch
 from collections import OrderedDict
 from model_inference import inference
 from tqdm import tqdm
+from verifier_collision import verifier_collision
 
 
-def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dict.npy', traffic_dict_file='utils_folder/track_dict.npy', predicting_frames=50):
+def process(acc, ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dict.npy', traffic_dict_file='utils_folder/track_dict.npy', predicting_frames=50):
     # 读取主车路径文件: ego_path_dict_file
     ego_path_dict = np.load(ego_path_dict_file, allow_pickle=True)
     ego_path_dict = str(ego_path_dict)
@@ -22,18 +23,18 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
     traffic_dict = ast.literal_eval(traffic_dict)
     traffic_dict = dict(traffic_dict)
 
-    # 创建 model
-    d_model = 16
-    nhead = 4
-    num_layers = 1
-    model_path = 'model_ckpt/epoch_999.pth'
-    model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
-    weights = torch.load(model_path, map_location='cpu')
-    delete_module_weight = OrderedDict()
-    for k, v in weights.items():
-        delete_module_weight[k[7:]] = weights[k]
-    model.load_state_dict(delete_module_weight, strict=True)
-    model.eval()
+    # # 创建 model
+    # d_model = 16
+    # nhead = 4
+    # num_layers = 1
+    # model_path = 'model_ckpt/epoch_999.pth'
+    # model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
+    # weights = torch.load(model_path, map_location='cpu')
+    # delete_module_weight = OrderedDict()
+    # for k, v in weights.items():
+    #     delete_module_weight[k[7:]] = weights[k]
+    # model.load_state_dict(delete_module_weight, strict=True)
+    # model.eval()
 
     # 获得主车初始状态
     init_ego_x, init_ego_y, init_ego_yaw, init_ego_vx, init_ego_vy, init_S = get_inital_state(ego_id, init_frame_id, ego_path_dict)    
@@ -69,11 +70,8 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
         # print(len(ego_future_path))
         
         # 获得主车预测加速度
-        # ego_info = (cur_ego_x, cur_ego_y, cur_vx, cur_vy, cur_yaw)
-        # acc = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path)
         ego_info = (cur_ego_x, cur_ego_y, cur_vx, cur_vy, cur_yaw)
-        
-        acc = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path, ego_history_path=cur_ego_history_path)
+        # acc = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path, ego_history_path=cur_ego_history_path)
         
         # 根据预测得到下一步路径
         next_S, next_ve = get_s_ve(cur_S, cur_ve, acc)
@@ -102,9 +100,93 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
         new_motion_state.vy = cur_vx
         new_motion_state.psi_rad = cur_yaw
         prediction_track_dict[cur_frame_id*100] = new_motion_state
-    
+        
     return prediction_track_dict
+
+
+def collision_detection(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dict.npy', traffic_dict_file='utils_folder/track_dict.npy', predicting_frames=50):
+    # 读取主车路径文件: ego_path_dict_file
+    ego_path_dict = np.load(ego_path_dict_file, allow_pickle=True)
+    ego_path_dict = str(ego_path_dict)
+    ego_path_dict = ast.literal_eval(ego_path_dict)
+    ego_path_dict = dict(ego_path_dict)
+
+    # 读取交通车信息文件: traffic_dict_file
+    traffic_dict = np.load(traffic_dict_file, allow_pickle=True)
+    traffic_dict = str(traffic_dict)
+    traffic_dict = ast.literal_eval(traffic_dict)
+    traffic_dict = dict(traffic_dict)
+
+    collision_acc_list = []
+    for acc in tqdm(np.arange(-5.0, 3.1, 0.1)):
+
+        # 获得主车初始状态
+        init_ego_x, init_ego_y, init_ego_yaw, init_ego_vx, init_ego_vy, init_S = get_inital_state(ego_id, init_frame_id, ego_path_dict)    
+        # init_ve = get_ve(init_ego_vx, init_ego_vy, init_ego_yaw)
+        init_ve = init_ego_vx * np.cos(init_ego_yaw) + init_ego_vy * np.sin(init_ego_yaw)
+
+        # 获得初始历史轨迹
+        init_ego_history_path = initial_ego_history(init_ego_x, init_ego_y, init_ego_yaw)
+        cur_ego_history_path = init_ego_history_path
+
+        # 循环初始状态
+        cur_frame_id = init_frame_id
+        cur_S, cur_ego_x, cur_ego_y = init_S, init_ego_x, init_ego_y
+        cur_vx, cur_vy = init_ego_vx, init_ego_vy
+        cur_yaw = init_ego_yaw
+        cur_ve = init_ve
     
+        for i in range(predicting_frames):
+            # 获得交https://pics1.baidu.com/feed/3ac79f3df8dcd100d90a9c6985f05f1db8122f68.jpeg@f_auto?token=75e0258603c7fd0fb8e581290c192e69通车信息
+                
+            if f'{ego_id}-{cur_frame_id}' not in traffic_dict:
+                print(f'there is no {ego_id}-{cur_frame_id}.')
+                break
+                
+            traffic_info = traffic_dict[f'{ego_id}-{cur_frame_id}']
+                
+            # 获得主车未来轨迹
+            ego_future_path = get_future_path(ego_id, ego_path_dict, cur_S)
+            # print(len(ego_future_path))
+                
+            # 获得主车预测加速度
+            ego_info = (cur_ego_x, cur_ego_y, cur_vx, cur_vy, cur_yaw)
+            # acc = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path, ego_history_path=cur_ego_history_path)
+                
+            if verifier_collision(cur_ego_x, cur_ego_y, cur_yaw, traffic_info):
+                collision_acc_list.append('%.2f' % acc)
+                break
+                
+            # 根据预测得到下一步路径
+            next_S, next_ve = get_s_ve(cur_S, cur_ve, acc)
+
+            try:
+                # 根据下一步路径得到下一步路径的状态
+                next_ego_x, next_ego_y, next_vx, next_vy, next_yaw = get_state(ego_id, next_S, old_x=cur_ego_x, old_y=cur_ego_y, ego_path_dict=ego_path_dict)
+            except Exception as e:
+                break
+                    
+            # next_ve = get_ve(next_vx, next_vy, next_yaw)
+            next_ego_history_path = update_ego_history(next_ego_x, next_ego_y, next_yaw, cur_ego_history_path)
+                
+            cur_frame_id += 1
+            cur_S = next_S
+            cur_ve = next_ve
+            cur_ego_x, cur_ego_y = next_ego_x, next_ego_y
+            cur_vx, cur_vy = next_vx, next_vy
+            cur_yaw = next_yaw
+            cur_ego_history_path = next_ego_history_path
+                        
+            new_motion_state = MotionState(time_stamp_ms=cur_frame_id*1000)
+            new_motion_state.x = cur_ego_x
+            new_motion_state.y = cur_ego_y
+            new_motion_state.vx = cur_vx
+            new_motion_state.vy = cur_vx
+            new_motion_state.psi_rad = cur_yaw
+                   
+    return collision_acc_list
+
+
     
 def get_state(ego_id, S, old_x, old_y, ego_path_dict):
     Ts = 0.1

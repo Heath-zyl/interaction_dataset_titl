@@ -25,6 +25,8 @@ from utils import dataset_types
 from utils import map_vis_lanelet2
 from utils import tracks_vis
 from utils import dict_utils
+import numpy as np
+import sys
 
 
 def update_plot():
@@ -120,6 +122,7 @@ if __name__ == "__main__":
                         nargs="?")
     
     parser.add_argument("--start_timestamp", type=int, nargs="?")
+    parser.add_argument("--acc", type=float, default=100.0)
     parser.add_argument("--track_id", type=int, help='track id to present')
     parser.add_argument("--duration", type=float, default=5.0, help='duration for present')
     
@@ -234,19 +237,29 @@ if __name__ == "__main__":
 
     ######### START #########
     # Calculate prediction track
-    displacement_error = {}
-    if args.track_id is not None:
+
+    if not (args.acc <= 3.0 and args.acc >= -5.0):
+        track_id = int(args.track_id)
+        collision_acc_list = []
+        from main_calulate_prediction import collision_detection
+        collision_acc_list = collision_detection(ego_id=track_id, init_frame_id=args.start_timestamp//100, predicting_frames=int(args.duration*10))     
+
+        print(collision_acc_list)
+        
+        sys.exit()
+        
+
+    elif args.track_id is not None:
+        displacement_error = {}
         track_id = int(args.track_id)
         print('caculate prediction track...')
         from main_calulate_prediction import process
-        prediction_track_dict = process(ego_id=track_id, init_frame_id=args.start_timestamp//100, predicting_frames=int(args.duration*10))
-        
+        prediction_track_dict = process(acc=float(args.acc), ego_id=track_id, init_frame_id=args.start_timestamp//100, predicting_frames=int(args.duration*10))      
         from copy import deepcopy
         car_ego_copy = deepcopy(track_dictionary[track_id])
         track_dictionary[str(track_id)+'_ego'] = track_dictionary.pop(track_id)
 
         car_ego_prediction = car_ego_copy
-
 
         for key, value in prediction_track_dict.items():
             car_ego_prediction.motion_states[key] = value
@@ -263,8 +276,6 @@ if __name__ == "__main__":
 
             abs_dis = ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
             displacement_error[timestamp] = abs_dis
-
-        # print(displacement_error)
 
     else:
         args.duration = None
