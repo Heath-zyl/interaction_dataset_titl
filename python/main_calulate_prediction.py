@@ -9,32 +9,7 @@ from model_inference import inference
 from tqdm import tqdm
 
 
-def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dict.npy', traffic_dict_file='utils_folder/track_dict.npy', predicting_frames=50):
-    # 读取主车路径文件: ego_path_dict_file
-    ego_path_dict = np.load(ego_path_dict_file, allow_pickle=True)
-    ego_path_dict = str(ego_path_dict)
-    ego_path_dict = ast.literal_eval(ego_path_dict)
-    ego_path_dict = dict(ego_path_dict)
-
-    # 读取交通车信息文件: traffic_dict_file
-    traffic_dict = np.load(traffic_dict_file, allow_pickle=True)
-    traffic_dict = str(traffic_dict)
-    traffic_dict = ast.literal_eval(traffic_dict)
-    traffic_dict = dict(traffic_dict)
-
-    # 创建 model
-    d_model = 16
-    nhead = 4
-    num_layers = 1
-    model_path = 'model_ckpt/epoch_999.pth'
-    model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
-    weights = torch.load(model_path, map_location='cpu')
-    delete_module_weight = OrderedDict()
-    for k, v in weights.items():
-        delete_module_weight[k[7:]] = weights[k]
-    model.load_state_dict(delete_module_weight, strict=True)
-    model.eval()
-
+def process(ego_id, init_frame_id, predicting_frames=50, ego_path_dict=None, traffic_dict=None, model=None):
     # 获得主车初始状态
     init_ego_x, init_ego_y, init_ego_yaw, init_ego_vx, init_ego_vy, init_S = get_inital_state(ego_id, init_frame_id, ego_path_dict)    
     # init_ve = get_ve(init_ego_vx, init_ego_vy, init_ego_yaw)
@@ -54,13 +29,13 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
     # 循环50次(5秒)
     prediction_track_dict = {}
     # while len(prediction_track_dict) < 50:
-    for i in tqdm(range(predicting_frames)):
+    for i in range(predicting_frames):
     # for i in range(32):
         # 获得交https://pics1.baidu.com/feed/3ac79f3df8dcd100d90a9c6985f05f1db8122f68.jpeg@f_auto?token=75e0258603c7fd0fb8e581290c192e69通车信息
         
         if f'{ego_id}-{cur_frame_id}' not in traffic_dict:
-            print(f'there is no {ego_id}-{cur_frame_id}.')
-            break
+            # print(f'there is no {ego_id}-{cur_frame_id}.')
+            return
         
         traffic_info = traffic_dict[f'{ego_id}-{cur_frame_id}']
         
@@ -82,7 +57,8 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
             # 根据下一步路径得到下一步路径的状态
             next_ego_x, next_ego_y, next_vx, next_vy, next_yaw = get_state(ego_id, next_S, old_x=cur_ego_x, old_y=cur_ego_y, ego_path_dict=ego_path_dict)
         except Exception as e:
-            break
+            # print('get state wrong!')
+            return
             
         # next_ve = get_ve(next_vx, next_vy, next_yaw)
         next_ego_history_path = update_ego_history(next_ego_x, next_ego_y, next_yaw, cur_ego_history_path)
@@ -95,7 +71,7 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
         cur_yaw = next_yaw
         cur_ego_history_path = next_ego_history_path
                 
-        new_motion_state = MotionState(time_stamp_ms=cur_frame_id*1000)
+        new_motion_state = MotionState(time_stamp_ms=cur_frame_id*100)
         new_motion_state.x = cur_ego_x
         new_motion_state.y = cur_ego_y
         new_motion_state.vx = cur_vx

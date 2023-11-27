@@ -121,7 +121,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--start_timestamp", type=int, nargs="?")
     parser.add_argument("--track_id", type=int, help='track id to present')
-    parser.add_argument("--duration", type=float, default=5.0, help='duration for present')
+    # parser.add_argument("--duration", type=float, default=5.0, help='duration for present')
     
     parser.add_argument("--lat_origin", type=float,
                         help="Latitude of the reference point for the projection of the lanelet map (float)",
@@ -225,49 +225,142 @@ if __name__ == "__main__":
     elif args.load_mode == 'pedestrian':
         pedestrian_dictionary = dataset_reader.read_pedestrian(pedestrian_file_name)
 
-    assert args.track_id is None or isinstance(args.track_id, int), 'track_id must be a digit.'
-    assert args.track_id is None or args.track_id in track_dictionary.keys(), 'wrong track_id.'
+    # assert args.track_id is None or isinstance(args.track_id, int), 'track_id must be a digit.'
+    # assert args.track_id is None or args.track_id in track_dictionary.keys(), 'wrong track_id.'
 
-    print(f'total tracks: {len(track_dictionary)}')
     # print(track_dictionary.keys())
     # print(track_dictionary[1])
 
     ######### START #########
-    # Calculate prediction track
-    displacement_error = {}
-    if args.track_id is not None:
-        track_id = int(args.track_id)
-        print('caculate prediction track...')
-        from main_calulate_prediction import process
-        prediction_track_dict = process(ego_id=track_id, init_frame_id=args.start_timestamp//100, predicting_frames=int(args.duration*10))
+    assert args.track_id is None and args.start_timestamp is None
+    import numpy as np
+    import ast
+    import torch
+    from collections import OrderedDict
+    from model.carTrackTransformerEncoder import CarTrackTransformerEncoder
+    from tqdm import tqdm
+    
+    # 读取主车路径文件: ego_path_dict_file
+    ego_path_dict_file = 'utils_folder/ego_path_dict.npy'
+    ego_path_dict = np.load(ego_path_dict_file, allow_pickle=True)
+    ego_path_dict = str(ego_path_dict)
+    ego_path_dict = ast.literal_eval(ego_path_dict)
+    ego_path_dict = dict(ego_path_dict)
+
+    # 读取交通车信息文件: traffic_dict_file
+    traffic_dict_file = 'utils_folder/track_dict.npy'
+    traffic_dict = np.load(traffic_dict_file, allow_pickle=True)
+    traffic_dict = str(traffic_dict)
+    traffic_dict = ast.literal_eval(traffic_dict)
+    traffic_dict = dict(traffic_dict)
+
+    # 创建 model
+    d_model = 16
+    nhead = 4
+    num_layers = 1
+    # model_path = 'model_ckpt/epoch_999_无负样本.pth'
+    model_path = 'model_ckpt/epoch_119_负样本500.pth'
+    model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
+    weights = torch.load(model_path, map_location='cpu')
+    delete_module_weight = OrderedDict()
+    for k, v in weights.items():
+        delete_module_weight[k[7:]] = weights[k]
+    model.load_state_dict(delete_module_weight, strict=True)
+    model.eval()
+    
+    # 计算 ade 和 fde
         
-        from copy import deepcopy
-        car_ego_copy = deepcopy(track_dictionary[track_id])
-        track_dictionary[str(track_id)+'_ego'] = track_dictionary.pop(track_id)
+    ade_list = []
+    fde_list = []
 
-        car_ego_prediction = car_ego_copy
-
-
-        for key, value in prediction_track_dict.items():
-            car_ego_prediction.motion_states[key] = value
-
-        car_ego_prediction.track_id = str(car_ego_copy.track_id) + 'auto'
-
-        track_dictionary[car_ego_prediction.track_id] = car_ego_prediction
+    from main_calulate_prediction import process
+    for track_id, info in tqdm(track_dictionary.items()):
         
-        for i, timestamp in enumerate(range(args.start_timestamp, args.start_timestamp+int(args.duration*1000)+100, 100)):
-            if timestamp not in track_dictionary[str(track_id)+'_ego' ].motion_states:
+        if track_id % 10 != 1:
+            continue
+        
+        start_frame, end_frame = info.time_stamp_ms_first // 100, info.time_stamp_ms_last // 100
+        # 10frame ~ 1s
+        
+        for frame in range(start_frame, end_frame, 10):
+            # print(f'  ==> stating time_stamp: {frame*100}')
+            
+            if (frame + 51) * 100 > info.time_stamp_ms_last:
                 break
-            a = track_dictionary[str(track_id)+'_ego' ].motion_states[timestamp]
-            b = track_dictionary[car_ego_copy.track_id].motion_states[timestamp]
+            
+            prediction_track_dict = process(ego_id=track_id, init_frame_id=frame, predicting_frames=51, ego_path_dict=ego_path_dict, traffic_dict=traffic_dict, model=model)
+            if prediction_track_dict is None:
+                break
+            
+            assert len(prediction_track_dict.keys()) == 51, len(prediction_track_dict.keys())
+            
+            # get ade
+            for time_stamp_ms, pred_motion_states in prediction_track_dict.items():
+                gt_x, gt_y = info.motion_states[time_stamp_ms].x, info.motion_states[time_stamp_ms].y
+                pred_x, pred_y = pred_motion_states.x, pred_motion_states.y
+                ade = ((pred_x - gt_x) ** 2 + (pred_y - gt_y) ** 2) ** 0.5
+                ade_list.append(ade)
+            
+            # get fde
+            last_timestamp_in_this_window = sorted(list(prediction_track_dict.keys()))[-1]
+            gt_x, gt_y = prediction_track_dict[last_timestamp_in_this_window].x, prediction_track_dict[last_timestamp_in_this_window].y
+            pred_x, pred_y = info.motion_states[last_timestamp_in_this_window].x, info.motion_states[last_timestamp_in_this_window].y
+            fde = ((pred_x - gt_x) ** 2 + (pred_y - gt_y) ** 2) ** 0.5
+            fde_list.append(fde)
+        
+    final_ade = sum(ade_list) / len(ade_list)
+    final_fde = sum(fde_list) / len(fde_list)
+    
+    print(f'ADE: {final_ade}')
+    print(f'FDE: {final_fde}')
+    
+    import sys
+    sys.exit()
+        
+        # print()
+        # print('========')
+    
+        # import sys
+        # sys.exit()
+    
+    # assert args.track_id is None
+    
+    # Calculate prediction track
+    # displacement_error = {}
+    # if args.track_id is not None:
+    #     track_id = int(args.track_id)
+    #     print('caculate prediction track...')
+    #     from main_calulate_prediction import process
+    #     prediction_track_dict = process(ego_id=track_id, init_frame_id=args.start_timestamp//100, predicting_frames=int(args.duration*10))
+        
+    #     from copy import deepcopy
+    #     car_ego_copy = deepcopy(track_dictionary[track_id])
+        
+    #     track_dictionary[str(track_id)+'_ego'] = track_dictionary.pop(track_id)
 
-            abs_dis = ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
-            displacement_error[timestamp] = abs_dis
+    #     car_ego_prediction = car_ego_copy
 
-        # print(displacement_error)
+    #     for key, value in prediction_track_dict.items():
+    #         car_ego_prediction.motion_states[key] = value
 
-    else:
-        args.duration = None
+    #     car_ego_prediction.track_id = str(car_ego_copy.track_id) + 'auto'
+
+    #     track_dictionary[car_ego_prediction.track_id] = car_ego_prediction
+        
+        
+    #     for i, timestamp in enumerate(range(args.start_timestamp, args.start_timestamp+int(args.duration*1000)+100, 100)):
+    #         if timestamp not in track_dictionary[str(track_id)+'_ego' ].motion_states:
+    #             break
+    #         a = track_dictionary[str(track_id)+'_ego' ].motion_states[timestamp]
+    #         b = track_dictionary[car_ego_copy.track_id].motion_states[timestamp]
+
+    #         abs_dis = ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
+    #         displacement_error[timestamp] = abs_dis
+
+    #     # print(displacement_error)
+
+    # else:
+    #     args.duration = None
 
     ######### END #########
 
