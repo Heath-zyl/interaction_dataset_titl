@@ -125,7 +125,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--start_timestamp", type=int, nargs="?")
     parser.add_argument("--acc", type=float, default=100.0)
-    parser.add_argument("--get_all_collision_acc", action='store_true', default='False')
+    parser.add_argument("--get_all_collision_acc", action='store_true', default=False)
     parser.add_argument("--track_id", type=int, help='track id to present')
     parser.add_argument("--duration", type=float, default=5.0, help='duration for present')
     

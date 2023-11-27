@@ -221,6 +221,11 @@ def get_s_ve(S0, Ve, acc):
     S = S0 + Ve * Ts + 1/2 * acc * Ts * Ts
     new_Ve = Ve + acc * Ts
     
+    if new_Ve < 0:
+        new_Ve = 0
+    if S < S0:
+        S = S0
+    
     return S, new_Ve
 
  
