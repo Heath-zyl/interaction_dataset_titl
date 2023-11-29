@@ -258,8 +258,11 @@ if __name__ == "__main__":
     d_model = 16
     nhead = 4
     num_layers = 1
+    # model_path = 'model_ckpt/epoch_473_负样本2000.pth'
     # model_path = 'model_ckpt/epoch_999_无负样本.pth'
-    model_path = 'model_ckpt/epoch_119_负样本500.pth'
+    # model_path = 'model_ckpt/epoch_119_负样本500.pth'
+    model_path = 'model_ckpt/epoch_51_负样本20.pth'
+    print(model_path)
     model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
     weights = torch.load(model_path, map_location='cpu')
     delete_module_weight = OrderedDict()
@@ -268,51 +271,70 @@ if __name__ == "__main__":
     model.load_state_dict(delete_module_weight, strict=True)
     model.eval()
     
-    # 计算 ade 和 fde
-        
-    ade_list = []
-    fde_list = []
-
     from main_calulate_prediction import process
+    
+    collision_cnt = 0
+    cnt_all = 0
+    
     for track_id, info in tqdm(track_dictionary.items()):
         
-        if track_id % 10 != 1:
-            continue
+        # if track_id % 10 != 0:
+        #     continue
         
         start_frame, end_frame = info.time_stamp_ms_first // 100, info.time_stamp_ms_last // 100
-        # 10frame ~ 1s
+        # # 10frame ~ 1s
+        # predicting_frames = end_frame - start_frame + 1
         
-        for frame in range(start_frame, end_frame, 10):
-            # print(f'  ==> stating time_stamp: {frame*100}')
-            
-            if (frame + 51) * 100 > info.time_stamp_ms_last:
-                break
-            
-            prediction_track_dict = process(ego_id=track_id, init_frame_id=frame, predicting_frames=51, ego_path_dict=ego_path_dict, traffic_dict=traffic_dict, model=model)
-            if prediction_track_dict is None:
-                break
-            
-            assert len(prediction_track_dict.keys()) == 51, len(prediction_track_dict.keys())
-            
-            # get ade
-            for time_stamp_ms, pred_motion_states in prediction_track_dict.items():
-                gt_x, gt_y = info.motion_states[time_stamp_ms].x, info.motion_states[time_stamp_ms].y
-                pred_x, pred_y = pred_motion_states.x, pred_motion_states.y
-                ade = ((pred_x - gt_x) ** 2 + (pred_y - gt_y) ** 2) ** 0.5
-                ade_list.append(ade)
-            
-            # get fde
-            last_timestamp_in_this_window = sorted(list(prediction_track_dict.keys()))[-1]
-            gt_x, gt_y = prediction_track_dict[last_timestamp_in_this_window].x, prediction_track_dict[last_timestamp_in_this_window].y
-            pred_x, pred_y = info.motion_states[last_timestamp_in_this_window].x, info.motion_states[last_timestamp_in_this_window].y
-            fde = ((pred_x - gt_x) ** 2 + (pred_y - gt_y) ** 2) ** 0.5
-            fde_list.append(fde)
-        
-    final_ade = sum(ade_list) / len(ade_list)
-    final_fde = sum(fde_list) / len(fde_list)
+        # collision = process(ego_id=track_id, init_frame_id=start_frame, predicting_frames=predicting_frames, ego_path_dict=ego_path_dict, traffic_dict=traffic_dict, model=model)
+ 
+        # if collision:
+            # collision_cnt += 1
     
-    print(f'ADE: {final_ade}')
-    print(f'FDE: {final_fde}')
+        
+        for i, frame in enumerate(range(start_frame, end_frame-8, 10)):
+            # if i % 10 != 0:
+            #     continue
+            
+            collision = process(ego_id=track_id, init_frame_id=frame, predicting_frames=51, ego_path_dict=ego_path_dict, traffic_dict=traffic_dict, model=model)        
+
+            if collision:
+                collision_cnt += 1
+            cnt_all += 1
+        
+    
+    print(f'collision: {collision_cnt}/{cnt_all}')
+        
+    #     for frame in range(start_frame, end_frame, 10):
+    #         # print(f'  ==> stating time_stamp: {frame*100}')
+            
+    #         if (frame + 51) * 100 > info.time_stamp_ms_last:
+    #             break
+            
+    #         prediction_track_dict = process(ego_id=track_id, init_frame_id=frame, predicting_frames=51, ego_path_dict=ego_path_dict, traffic_dict=traffic_dict, model=model)
+    #         if prediction_track_dict is None:
+    #             break
+            
+    #         assert len(prediction_track_dict.keys()) == 51, len(prediction_track_dict.keys())
+            
+    #         # get ade
+    #         for time_stamp_ms, pred_motion_states in prediction_track_dict.items():
+    #             gt_x, gt_y = info.motion_states[time_stamp_ms].x, info.motion_states[time_stamp_ms].y
+    #             pred_x, pred_y = pred_motion_states.x, pred_motion_states.y
+    #             ade = ((pred_x - gt_x) ** 2 + (pred_y - gt_y) ** 2) ** 0.5
+    #             ade_list.append(ade)
+            
+    #         # get fde
+    #         last_timestamp_in_this_window = sorted(list(prediction_track_dict.keys()))[-1]
+    #         gt_x, gt_y = prediction_track_dict[last_timestamp_in_this_window].x, prediction_track_dict[last_timestamp_in_this_window].y
+    #         pred_x, pred_y = info.motion_states[last_timestamp_in_this_window].x, info.motion_states[last_timestamp_in_this_window].y
+    #         fde = ((pred_x - gt_x) ** 2 + (pred_y - gt_y) ** 2) ** 0.5
+    #         fde_list.append(fde)
+        
+    # final_ade = sum(ade_list) / len(ade_list)
+    # final_fde = sum(fde_list) / len(fde_list)
+    
+    # print(f'ADE: {final_ade}')
+    # print(f'FDE: {final_fde}')
     
     import sys
     sys.exit()

@@ -7,6 +7,7 @@ import torch
 from collections import OrderedDict
 from model_inference import inference
 from tqdm import tqdm
+from verifier_collision import verifier_collision
 
 
 def process(ego_id, init_frame_id, predicting_frames=50, ego_path_dict=None, traffic_dict=None, model=None):
@@ -28,14 +29,12 @@ def process(ego_id, init_frame_id, predicting_frames=50, ego_path_dict=None, tra
     
     # 循环50次(5秒)
     prediction_track_dict = {}
-    # while len(prediction_track_dict) < 50:
     for i in range(predicting_frames):
-    # for i in range(32):
         # 获得交https://pics1.baidu.com/feed/3ac79f3df8dcd100d90a9c6985f05f1db8122f68.jpeg@f_auto?token=75e0258603c7fd0fb8e581290c192e69通车信息
         
         if f'{ego_id}-{cur_frame_id}' not in traffic_dict:
-            # print(f'there is no {ego_id}-{cur_frame_id}.')
-            return
+            print(f'there is no {ego_id}-{cur_frame_id}.')
+            return False
         
         traffic_info = traffic_dict[f'{ego_id}-{cur_frame_id}']
         
@@ -50,6 +49,9 @@ def process(ego_id, init_frame_id, predicting_frames=50, ego_path_dict=None, tra
         
         acc = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path, ego_history_path=cur_ego_history_path)
         
+        if verifier_collision(cur_ego_x, cur_ego_y, cur_yaw, traffic_info):
+            return True
+        
         # 根据预测得到下一步路径
         next_S, next_ve = get_s_ve(cur_S, cur_ve, acc)
 
@@ -57,8 +59,9 @@ def process(ego_id, init_frame_id, predicting_frames=50, ego_path_dict=None, tra
             # 根据下一步路径得到下一步路径的状态
             next_ego_x, next_ego_y, next_vx, next_vy, next_yaw = get_state(ego_id, next_S, old_x=cur_ego_x, old_y=cur_ego_y, ego_path_dict=ego_path_dict)
         except Exception as e:
-            # print('get state wrong!')
-            return
+            # print(f'get state wrong @ {cur_frame_id}')
+            # print(e)
+            return False
             
         # next_ve = get_ve(next_vx, next_vy, next_yaw)
         next_ego_history_path = update_ego_history(next_ego_x, next_ego_y, next_yaw, cur_ego_history_path)
@@ -79,7 +82,7 @@ def process(ego_id, init_frame_id, predicting_frames=50, ego_path_dict=None, tra
         new_motion_state.psi_rad = cur_yaw
         prediction_track_dict[cur_frame_id*100] = new_motion_state
     
-    return prediction_track_dict
+    return False
     
     
 def get_state(ego_id, S, old_x, old_y, ego_path_dict):
