@@ -260,6 +260,7 @@ if __name__ == "__main__":
     num_layers = 1
     # model_path = 'model_ckpt/epoch_999_无负样本.pth'
     model_path = 'model_ckpt/epoch_119_负样本500.pth'
+    print(model_path)
     model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
     weights = torch.load(model_path, map_location='cpu')
     delete_module_weight = OrderedDict()
@@ -288,11 +289,11 @@ if __name__ == "__main__":
             if (frame + 51) * 100 > info.time_stamp_ms_last:
                 break
             
-            prediction_track_dict = process(ego_id=track_id, init_frame_id=frame, predicting_frames=51, ego_path_dict=ego_path_dict, traffic_dict=traffic_dict, model=model)
+            prediction_track_dict = process(ego_id=track_id, init_frame_id=frame, predicting_frames=31, ego_path_dict=ego_path_dict, traffic_dict=traffic_dict, model=model)
             if prediction_track_dict is None:
                 break
             
-            assert len(prediction_track_dict.keys()) == 51, len(prediction_track_dict.keys())
+            assert len(prediction_track_dict.keys()) == 31, len(prediction_track_dict.keys())
             
             # get ade
             for time_stamp_ms, pred_motion_states in prediction_track_dict.items():
