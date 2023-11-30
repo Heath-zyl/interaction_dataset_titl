@@ -57,7 +57,7 @@ class CarTrackTransformerEncoder(nn.Module):
                 xavier_uniform_(p)
 
         
-    def forward(self, ego_veh_data, ego_future_track_data, ego_history_track_data, traffic_veh_data, ego_action_data, traffic_veh_key_padding=None):
+    def forward(self, ego_veh_data, ego_future_track_data, ego_history_track_data, traffic_veh_data, traffic_veh_key_padding=None):
 
         # mlp to ego
         ego_ebd = self.mlp_ego(ego_veh_data)
@@ -91,22 +91,21 @@ class CarTrackTransformerEncoder(nn.Module):
             src_key_padding_mask = src_key_padding_mask.bool()
         else:
             src_key_padding_mask = torch.zeros(traffic_veh_data.shape[0], traffic_veh_data.shape[1]+4).type_as(ego_veh_data).bool()
-        
-        
+                
         if self.training:
             memory = self.transformer_encoder(input_ebd_with_pos_ebd, src_key_padding_mask=src_key_padding_mask)
             cls_out = memory[0]
-            ego_action_data = torch.unsqueeze(ego_action_data, dim=1)
-            mlp_input = cls_out + ego_action_data
-            out = self.mlp_tail(mlp_input)
+            # ego_action_data = torch.unsqueeze(ego_action_data, dim=1)
+            # mlp_input = cls_out + ego_action_data
+            out = self.mlp_tail(cls_out)
             return out
             
         else:
-            memory, attentions_weights_list = self.transformer_encoder(input_ebd, src_key_padding_mask=src_key_padding_mask)
+            memory, attentions_weights_list = self.transformer_encoder(input_ebd_with_pos_ebd, src_key_padding_mask=src_key_padding_mask)
             cls_out = memory[0]
-            ego_action_data = torch.unsqueeze(ego_action_data, dim=1)
-            mlp_input = cls_out + ego_action_data
-            out = self.mlp_tail(mlp_input)
+            # ego_action_data = torch.unsqueeze(ego_action_data, dim=1)
+            # mlp_input = cls_out + ego_action_data
+            out = self.mlp_tail(cls_out)
             return out, attentions_weights_list
             
         

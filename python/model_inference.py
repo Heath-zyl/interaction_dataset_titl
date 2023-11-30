@@ -121,25 +121,9 @@ def inference(model, ego_info, traffic_info, ego_future_path, ego_history_path):
     single_ego_future_track_data = torch.unsqueeze(transformed_ego_future_path, 0)
     single_ego_history_track_data = torch.unsqueeze(transformed_ego_history_path, 0)
     
-    candidates_BS = 81
-    if candidates_BS == 801:
-        candidate_action_list = (np.arange(-5, 3.01, 0.01) + 1) / 4
-        candidate_action_tensor = torch.Tensor(candidate_action_list).type_as(single_ego_veh_data)
-    elif candidates_BS == 81:
-        candidate_action_list = (np.arange(-5, 3.1, 0.1) + 1) / 4
-        candidate_action_tensor = torch.Tensor(candidate_action_list).type_as(single_ego_veh_data)
     
-    ratio_list = []
-    for candidate_action in candidate_action_tensor:
-        candidate_action = candidate_action.unsqueeze(0)
-        # output = model(single_ego_veh_data, single_traffic_veh_data, single_ego_future_track_data, candidate_action)
-        output = model(single_ego_veh_data, single_ego_future_track_data, single_ego_history_track_data, single_traffic_veh_data, candidate_action)
-        ratio, attention_weights = output
-        # ratio = output
-        ratio_list.append(ratio)
-    
-    ratio_tensor = torch.Tensor(ratio_list)
-    max_idx = torch.argmax(ratio_tensor)
-    
-    return (candidate_action_list[max_idx] * 4) - 1
+    output = model(single_ego_veh_data, single_ego_future_track_data, single_ego_history_track_data, single_traffic_veh_data)
+    ratio, _ = output
+
+    return ratio.squeeze().detach().data * 4 - 1
     
