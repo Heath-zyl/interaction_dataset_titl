@@ -32,6 +32,8 @@ def polygon_xy_from_motionstate_pedest(ms, width, length):
 
 def update_objects_plot(timestamp, patches_dict, text_dict, axes, track_dict=None, pedest_dict=None):
     
+    # print(timestamp, track_dict.keys())
+    
     if track_dict is not None:
 
         for key, value in track_dict.items():
@@ -40,39 +42,62 @@ def update_objects_plot(timestamp, patches_dict, text_dict, axes, track_dict=Non
                 # object is visible
                 ms = value.motion_states[timestamp]
                 assert isinstance(ms, MotionState)
-
+                
+                # print(key, ms, patches_dict.keys())
+                
                 if key not in patches_dict:
                     width = value.width
                     length = value.length
 
-                    if isinstance(key, str) and 'auto' in key:
-                        rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width*.8, length*.8), closed=True, zorder=20, color='orange', alpha=0.5)
+                    if isinstance(key, str) and '_auto' in key:
+                        rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width*.8, length*.8), closed=True, zorder=20, color='black', alpha=1)
+                        attn = None
                     elif isinstance(key, str) and 'ego' in key:
                         rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width, length), closed=True, zorder=20, color='purple')
+                        attn = None
                     else:
-                        rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width, length), closed=True, zorder=20)
+                        attn = ms.get_attn_weight()
+                        if attn is not None:
+                            r, g, b = 1., 1 - attn, 0.
+                            rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width, length), closed=True, zorder=20, color=(r,g,b))
+                        else:
+                            rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width, length), closed=True, zorder=20)
                     
                     patches_dict[key] = rect
                     axes.add_patch(rect)
-                    text_dict[key] = axes.text(ms.x, ms.y + 2, str(key), horizontalalignment='center', zorder=30)
+                    
+                    if attn is None:
+                        text_dict[key] = axes.text(ms.x, ms.y + 2, str(key), horizontalalignment='center', zorder=30)
+                    else:
+                        text_dict[key] = axes.text(ms.x, ms.y + 2, str(key)+':%.2f'%attn, horizontalalignment='center', zorder=30)
                 else:
                     width = value.width
                     length = value.length
                     
                     if isinstance(key, str) and 'auto' in key:
                         patches_dict[key].set_xy(polygon_xy_from_motionstate(ms, width*.8, length*.8))
+                        attn = None
                     elif isinstance(key, str) and 'ego' in key:
                         patches_dict[key].set_xy(polygon_xy_from_motionstate(ms, width, length))
+                        attn = None
                     else:
                         patches_dict[key].set_xy(polygon_xy_from_motionstate(ms, width, length))
+                        attn = ms.get_attn_weight()
+                        if attn is not None:
+                            r, g, b = 1., 1 - attn, 0.
                     
                     text_dict[key].set_position((ms.x, ms.y + 2))
+                    if attn is not None:
+                        text_dict[key].set_text(str(key)+':%.2f'%attn)
+                        patches_dict[key].set_color((r,g,b))
+                    
             else:
                 if key in patches_dict:
                     patches_dict[key].remove()
                     patches_dict.pop(key)
                     text_dict[key].remove()
                     text_dict.pop(key)
+
 
     if pedest_dict is not None:
 

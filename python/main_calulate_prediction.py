@@ -4,7 +4,7 @@ from scipy.interpolate import interp1d
 from utils.dataset_types import MotionState
 from model.carTrackTransformerEncoder import CarTrackTransformerEncoder
 import torch
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from model_inference import inference
 from tqdm import tqdm
 
@@ -26,7 +26,11 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
     d_model = 16
     nhead = 4
     num_layers = 1
-    model_path = 'model_ckpt/epoch_999.pth'
+    # model_path = 'model_ckpt/epoch_119_负样本500.pth'
+    # model_path = 'model_ckpt/epoch_473_负样本2000.pth'
+    model_path = 'model_ckpt/epoch_999_无负样本.pth'
+    # model_path = 'model_ckpt/epoch_51_负样本20.pth'
+    
     model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
     weights = torch.load(model_path, map_location='cpu')
     delete_module_weight = OrderedDict()
@@ -51,18 +55,18 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
     cur_yaw = init_ego_yaw
     cur_ve = init_ve
     
-    # 循环50次(5秒)
+    # 循环N*10次(N秒)
     prediction_track_dict = {}
-    # while len(prediction_track_dict) < 50:
+    trackID2_to_frameAttn_dict = defaultdict(list)
     for i in tqdm(range(predicting_frames)):
-    # for i in range(32):
-        # 获得交https://pics1.baidu.com/feed/3ac79f3df8dcd100d90a9c6985f05f1db8122f68.jpeg@f_auto?token=75e0258603c7fd0fb8e581290c192e69通车信息
         
         if f'{ego_id}-{cur_frame_id}' not in traffic_dict:
-            print(f'there is no {ego_id}-{cur_frame_id}.')
+            # print(f'there is no {ego_id}-{cur_frame_id}.')
             break
         
         traffic_info = traffic_dict[f'{ego_id}-{cur_frame_id}']
+        # print(len(traffic_info), type(traffic_info))
+        # print(traffic_info)
         
         # 获得主车未来轨迹
         ego_future_path = get_future_path(ego_id, ego_path_dict, cur_S)
@@ -73,7 +77,17 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
         # acc = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path)
         ego_info = (cur_ego_x, cur_ego_y, cur_vx, cur_vy, cur_yaw)
         
-        acc = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path, ego_history_path=cur_ego_history_path)
+        acc, attn_weights = inference(model, ego_info=ego_info, traffic_info=traffic_info, ego_future_path=ego_future_path, ego_history_path=cur_ego_history_path)
+        
+        # attn_weights: [1, 1, N, N]
+        
+        cls_weight = attn_weights[0][0, 0, 4:]
+        mmax, mmin = cls_weight.max(), cls_weight.min()
+        cls_weight = (cls_weight - mmin) / (mmax - mmin)
+        
+        for traffic, attn in zip(traffic_info, cls_weight):
+            traffic_id = traffic[0]
+            trackID2_to_frameAttn_dict[traffic_id].append(f'{cur_frame_id*100}-{"%.4f"%attn}')
         
         # 根据预测得到下一步路径
         next_S, next_ve = get_s_ve(cur_S, cur_ve, acc)
@@ -103,7 +117,7 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
         new_motion_state.psi_rad = cur_yaw
         prediction_track_dict[cur_frame_id*100] = new_motion_state
     
-    return prediction_track_dict
+    return prediction_track_dict, trackID2_to_frameAttn_dict
     
     
 def get_state(ego_id, S, old_x, old_y, ego_path_dict):

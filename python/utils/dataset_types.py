@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from random import random
 
 DELTA_TIMESTAMP_MS = 100  # similar throughout the whole dataset
 
@@ -13,9 +13,13 @@ class MotionState:
         self.vx = None
         self.vy = None
         self.psi_rad = None
+        self.attn_weight = None
 
     def __str__(self):
         return "MotionState: " + str(self.__dict__)
+
+    def get_attn_weight(self):
+        return self.attn_weight
 
 
 class Track:

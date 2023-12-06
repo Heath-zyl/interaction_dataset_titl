@@ -239,8 +239,24 @@ if __name__ == "__main__":
         track_id = int(args.track_id)
         print('caculate prediction track...')
         from main_calulate_prediction import process
-        prediction_track_dict = process(ego_id=track_id, init_frame_id=args.start_timestamp//100, predicting_frames=int(args.duration*10))
+        prediction_track_dict, trackID2_to_frameAttn_dict = process(ego_id=track_id, init_frame_id=args.start_timestamp//100, predicting_frames=int(args.duration*10)+1)
         
+        # print(len(prediction_track_dict), prediction_track_dict.keys())
+        # print(len(trackID2_to_frameAttn_dict), trackID2_to_frameAttn_dict.keys())
+        # print(track_dictionary.keys())
+        
+        # print(trackID2_to_frameAttn_dict.keys())
+        
+        for traffic_id, frame_attn in trackID2_to_frameAttn_dict.items():
+            # print(traffic_id, frame_attn)
+            for item in frame_attn:
+                time_stamp_ms, attn = int(item.split('-')[0]), float(item.split('-')[1])
+                # print(track_dictionary[traffic_id].motion_states[time_stamp_ms])
+                track_dictionary[traffic_id].motion_states[time_stamp_ms].attn_weight = attn
+
+                # import sys
+                # sys.exit()
+            
         from copy import deepcopy
         car_ego_copy = deepcopy(track_dictionary[track_id])
         track_dictionary[str(track_id)+'_ego'] = track_dictionary.pop(track_id)
@@ -251,7 +267,7 @@ if __name__ == "__main__":
         for key, value in prediction_track_dict.items():
             car_ego_prediction.motion_states[key] = value
 
-        car_ego_prediction.track_id = str(car_ego_copy.track_id) + 'auto'
+        car_ego_prediction.track_id = str(car_ego_copy.track_id) + '_auto'
 
         track_dictionary[car_ego_prediction.track_id] = car_ego_prediction
         
@@ -263,6 +279,9 @@ if __name__ == "__main__":
 
             abs_dis = ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
             displacement_error[timestamp] = abs_dis
+
+        ##### *** ######
+        # track_dictionary.pop(str(track_id)+'_ego')
 
         # print(displacement_error)
 

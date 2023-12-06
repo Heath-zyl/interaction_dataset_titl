@@ -130,16 +130,20 @@ def inference(model, ego_info, traffic_info, ego_future_path, ego_history_path):
         candidate_action_tensor = torch.Tensor(candidate_action_list).type_as(single_ego_veh_data)
     
     ratio_list = []
+    attention_weights_list = []
     for candidate_action in candidate_action_tensor:
         candidate_action = candidate_action.unsqueeze(0)
-        # output = model(single_ego_veh_data, single_traffic_veh_data, single_ego_future_track_data, candidate_action)
         output = model(single_ego_veh_data, single_ego_future_track_data, single_ego_history_track_data, single_traffic_veh_data, candidate_action)
         ratio, attention_weights = output
-        # ratio = output
         ratio_list.append(ratio)
+        attention_weights_list.append(attention_weights)
+    
     
     ratio_tensor = torch.Tensor(ratio_list)
     max_idx = torch.argmax(ratio_tensor)
     
-    return (candidate_action_list[max_idx] * 4) - 1
+    acc = (candidate_action_list[max_idx] * 4) - 1
+    attn_weights = attention_weights_list[max_idx]
+    
+    return acc, attn_weights
     
