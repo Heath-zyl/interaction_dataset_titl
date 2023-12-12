@@ -53,7 +53,7 @@ def update_objects_plot(timestamp, patches_dict, text_dict, axes, track_dict=Non
                         rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width*.8, length*.8), closed=True, zorder=20, color='black', alpha=1)
                         attn = None
                     elif isinstance(key, str) and 'ego' in key:
-                        rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width, length), closed=True, zorder=20, color='purple')
+                        rect = matplotlib.patches.Polygon(polygon_xy_from_motionstate(ms, width, length), closed=True, zorder=20, color=(42/255, 157/255, 142/255))
                         attn = None
                     else:
                         attn = ms.get_attn_weight()
@@ -66,10 +66,21 @@ def update_objects_plot(timestamp, patches_dict, text_dict, axes, track_dict=Non
                     patches_dict[key] = rect
                     axes.add_patch(rect)
                     
-                    if attn is None:
-                        text_dict[key] = axes.text(ms.x, ms.y + 2, str(key), horizontalalignment='center', zorder=30)
+                    # if attn is None:
+                    #     text_dict[key] = axes.text(ms.x, ms.y + 2, str(key), horizontalalignment='center', zorder=30)
+                    # else:
+                    #     text_dict[key] = axes.text(ms.x, ms.y + 2, str(key)+':%.4f'%attn, horizontalalignment='center', zorder=30)
+                    
+                    # text_dict[key] = axes.text(ms.x, ms.y - 1, str(key), horizontalalignment='center', zorder=30)
+                    
+                    if attn is not None:
+                        text_dict[key] = axes.text(ms.x, ms.y - 1, str(key), horizontalalignment='center', zorder=30)
+                        text_dict[key] = axes.text(ms.x, ms.y + 1, '%.3f'%attn, horizontalalignment='center', zorder=30, fontweight='bold')
+                        # print(help(axes.text))
+                        # text_dict[key] = axes.text(ms.x, ms.y + 1, str(attn)[:4], horizontalalignment='center', zorder=30)
                     else:
-                        text_dict[key] = axes.text(ms.x, ms.y + 2, str(key)+':%.2f'%attn, horizontalalignment='center', zorder=30)
+                        text_dict[key] = axes.text(ms.x, ms.y + 1, 'ego', horizontalalignment='center', zorder=30)
+                
                 else:
                     width = value.width
                     length = value.length
@@ -88,7 +99,7 @@ def update_objects_plot(timestamp, patches_dict, text_dict, axes, track_dict=Non
                     
                     text_dict[key].set_position((ms.x, ms.y + 2))
                     if attn is not None:
-                        text_dict[key].set_text(str(key)+':%.2f'%attn)
+                        text_dict[key].set_text(str(key)+':%.4f'%attn)
                         patches_dict[key].set_color((r,g,b))
                     
             else:

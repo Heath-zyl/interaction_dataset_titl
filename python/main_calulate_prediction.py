@@ -28,8 +28,9 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
     num_layers = 1
     # model_path = 'model_ckpt/epoch_119_负样本500.pth'
     # model_path = 'model_ckpt/epoch_473_负样本2000.pth'
-    model_path = 'model_ckpt/epoch_999_无负样本.pth'
+    # model_path = 'model_ckpt/epoch_999_无负样本.pth'
     # model_path = 'model_ckpt/epoch_51_负样本20.pth'
+    model_path = 'model_ckpt/epoch_999_负样本1000.pth'
     
     model = CarTrackTransformerEncoder(num_layers=num_layers, nhead=nhead, d_model=d_model)
     weights = torch.load(model_path, map_location='cpu')
@@ -82,8 +83,17 @@ def process(ego_id, init_frame_id, ego_path_dict_file='utils_folder/ego_path_dic
         # attn_weights: [1, 1, N, N]
         
         cls_weight = attn_weights[0][0, 0, 4:]
-        mmax, mmin = cls_weight.max(), cls_weight.min()
-        cls_weight = (cls_weight - mmin) / (mmax - mmin)
+        
+        # Normalize to 0-1
+        # mmax, mmin = cls_weight.max(), cls_weight.min()
+        # cls_weight = (cls_weight - mmin) / (mmax - mmin)
+        
+        # Weight
+        cls_weight = cls_weight / (cls_weight.sum())
+        
+        # gamma trans + weight_trans
+        # cls_weight = cls_weight ** 8
+        # cls_weight = cls_weight / (cls_weight.sum())
         
         for traffic, attn in zip(traffic_info, cls_weight):
             traffic_id = traffic[0]
@@ -197,10 +207,26 @@ def get_future_path(ego_id, ego_path_dict, S):
 
 
 def initial_ego_history(x, y, yaw):
-    oldest_point = (x, y, yaw)
-    ego_history_path = [oldest_point] * 10
-    return ego_history_path
+    # oldest_point = (x, y, yaw)
+    # ego_history_path = [oldest_point] * 10
+    # return ego_history_path
 
+
+    ##########
+    ##########
+    ##########
+
+    ego_history_path = input('please input ego history path: ')
+    # print(ego_history_path)
+    # ego_history_path = ego_history_path.strip()[1:-1]
+    # print(ego_history_path.split(','))
+    
+    ego_history_path = ''.join([char for char in ego_history_path if char not in [' ', '(', ')', '[', ']']]).split(',')
+    
+    ego_history_path = [(float(ego_history_path[i]), float(ego_history_path[i+1]), float(ego_history_path[i+2])) for i in range(0, len(ego_history_path), 3)]
+    
+    return ego_history_path
+    
 
 def update_ego_history(x, y, yaw, ego_history_path):
     ego_history_path.pop(0)

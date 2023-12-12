@@ -121,7 +121,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--start_timestamp", type=int, nargs="?")
     parser.add_argument("--track_id", type=int, help='track id to present')
-    parser.add_argument("--duration", type=float, default=5.0, help='duration for present')
+    parser.add_argument("--duration", type=float, default=1.0, help='duration for present')
     
     parser.add_argument("--lat_origin", type=float,
                         help="Latitude of the reference point for the projection of the lanelet map (float)",
@@ -281,7 +281,7 @@ if __name__ == "__main__":
             displacement_error[timestamp] = abs_dis
 
         ##### *** ######
-        # track_dictionary.pop(str(track_id)+'_ego')
+        track_dictionary.pop(str(track_id)+'_auto')
 
         # print(displacement_error)
 
